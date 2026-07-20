@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Global Portfolio — Live Tracker</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141922; --panel2:#1b2230; --line:#232c3b;
+    --txt:#e6ebf2; --muted:#8b96a8; --dim:#5f6b7e;
+    --up:#3fd07f; --upbg:rgba(63,208,127,.12);
+    --down:#ff5d6c; --downbg:rgba(255,93,108,.12);
+    --accent:#5b8cff; --warn:#f5a742; --chip:#212a3a; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px;line-height:1.4;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1280px;margin:0 auto;padding:20px 18px 60px}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+  h1{font-size:20px;margin:0;font-weight:650;letter-spacing:.2px}
+  h1 span{color:var(--muted);font-weight:400;font-size:13px}
+  .status{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
+  .mkt-open .dot{background:var(--up);box-shadow:0 0 8px var(--up)}
+  .mkt-closed .dot{background:var(--dim)}
+  button.refresh{background:var(--chip);color:var(--txt);border:1px solid var(--line);
+    padding:6px 12px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:500}
+  button.refresh:hover{background:var(--panel2)}
+  button.refresh:disabled{opacity:.5;cursor:default}
+  .keybar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:16px;flex-wrap:wrap}
+  .keybar input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:4px 8px;font-size:11px}
+  .keybar input.key{width:200px}
+  .keybar input.cash{width:110px}
+  .keybar button{background:var(--chip);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer}
+  .keybar .sep{width:1px;height:16px;background:var(--line)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+  .card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:6px}
+  .card .val{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums}
+  .card .sub{font-size:12px;margin-top:3px;font-variant-numeric:tabular-nums}
+  .grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;align-items:start}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .panel h2{font-size:13px;margin:0;padding:13px 16px;border-bottom:1px solid var(--line);
+    font-weight:600;letter-spacing:.3px;display:flex;justify-content:space-between;align-items:center}
+  .panel h2 small{color:var(--muted);font-weight:400;font-size:11px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:9px 10px;text-align:right;white-space:nowrap}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
+    font-weight:600;cursor:pointer;user-select:none;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+  th:hover{color:var(--txt)}
+  th.l,td.l{text-align:left}
+  tbody tr{border-bottom:1px solid rgba(35,44,59,.5)}
+  tbody tr:hover{background:var(--panel2)}
+  .tick{font-weight:650;font-size:13px}
+  .tname{color:var(--muted);font-size:11px;margin-top:1px}
+  .badge{font-size:9px;padding:1px 5px;border-radius:5px;margin-left:6px;vertical-align:middle;
+    background:var(--chip);color:var(--muted);letter-spacing:.4px}
+  .badge.crypto{background:rgba(91,140,255,.14);color:#9db6ff}
+  .badge.frozen{background:var(--downbg);color:var(--down)}
+  .badge.cash{background:rgba(107,118,134,.2);color:#c3ccd8}
+  .up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--muted)}
+  .pill{display:inline-block;padding:2px 7px;border-radius:7px;font-weight:600;font-size:12px}
+  .pill.up{background:var(--upbg)}.pill.down{background:var(--downbg)}
+  .alloc-row{display:flex;align-items:center;gap:10px;padding:7px 16px;font-size:12.5px}
+  .alloc-row .nm{width:64px;font-weight:600}
+  .alloc-bar{flex:1;height:8px;border-radius:6px;background:var(--panel2);overflow:hidden}
+  .alloc-bar span{display:block;height:100%;border-radius:6px}
+  .alloc-row .pc{width:52px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+  .wl{padding:6px 16px 12px}
+  .wl-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(35,44,59,.5);font-size:12.5px}
+  .wl-item:last-child{border:0}
+  .flag{display:flex;gap:8px;padding:9px 16px;font-size:12px;color:var(--warn);border-top:1px solid var(--line);align-items:flex-start}
+  .flag b{color:var(--txt)}
+  footer{margin-top:22px;color:var(--dim);font-size:11px;line-height:1.6}
+  .loading{color:var(--muted);font-style:italic}
+  .err{color:var(--down)}
+  .muted{color:var(--muted)}
+  .sec-split{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px}
+  .sec-chip{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:11px}
+  .sec-chip b{font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Global Portfolio <span>· live tracker</span></h1>
+      <div class="status">
+        <span id="mktStatus" class="mkt-closed"><span class="dot"></span><span id="mktText">Checking market…</span></span>
+        <span id="updated">—</span>
+        <span id="nextRefresh"></span>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="refresh" id="refreshBtn">↻ Refresh</button>
+    </div>
+  </header>
+
+  <div class="keybar">
+    <span>Finnhub key:</span>
+    <input id="keyInput" class="key" type="password" placeholder="paste key" autocomplete="off" />
+    <button id="keySave">Save</button>
+    <span id="keyState"></span>
+    <span class="sep"></span>
+    <span>Cash / other ($):</span>
+    <input id="cashInput" class="cash" type="number" step="1" placeholder="0" />
+    <button id="cashSave">Save</button>
+    <span style="margin-left:auto">Stocks/ETFs: Finnhub · ETH: Coinbase</span>
+  </div>
+
+  <div class="kpis" id="kpis">
+    <div class="card"><div class="lbl">Market Value</div><div class="val" id="kMv">—</div><div class="sub muted" id="kMvSub">incl. cash</div></div>
+    <div class="card"><div class="lbl">Total Invested</div><div class="val" id="kInv">—</div><div class="sub muted">cost basis</div></div>
+    <div class="card"><div class="lbl">Unrealized P&L</div><div class="val" id="kPnl">—</div><div class="sub" id="kPnlPc">—</div></div>
+    <div class="card"><div class="lbl">Day Change</div><div class="val" id="kDay">—</div><div class="sub" id="kDayPc">—</div></div>
+    <div class="card"><div class="lbl">Holdings</div><div class="val" id="kCount">—</div><div class="sub muted" id="kCountSub">positions</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Positions <small id="posMeta">click a column to sort</small></h2>
+      <div style="overflow-x:auto">
+        <table id="posTable">
+          <thead>
+            <tr>
+              <th class="l" data-k="symbol">Ticker</th>
+              <th data-k="price">Price</th>
+              <th data-k="dayPc">Day</th>
+              <th data-k="shares">Shares</th>
+              <th data-k="cost">Cost/sh</th>
+              <th data-k="mv">Mkt Value</th>
+              <th data-k="pnl">P&L $</th>
+              <th data-k="pnlPc">P&L %</th>
+              <th data-k="weight">Wt</th>
+            </tr>
+          </thead>
+          <tbody id="posBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="panel">
+        <h2>Allocation <small>by market value</small></h2>
+        <div id="allocList" style="padding:8px 0 10px"></div>
+        <div class="sec-split" id="secSplit"></div>
+      </div>
+      <div class="panel">
+        <h2>Top Movers <small>unrealized P&L %</small></h2>
+        <div class="wl" id="winners"></div>
+      </div>
+      <div class="panel" id="flagsPanel">
+        <h2>Risk Flags</h2>
+        <div id="flags"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div><b>Cost basis</b> is derived from the two portfolio snapshots you provided (current value − gain ÷ shares); it is an estimate accurate to the rounding of those figures. <b>Cash / other</b> is an editable line for cash or positions not in the screenshots, so the total reconciles to your broker. Live US stock/ETF quotes come from Finnhub (your key), ETH from Coinbase — both fetched directly in your browser. This is a tracking tool, not investment advice.</div>
+    <div style="margin-top:6px" id="dataNote"></div>
+  </footer>
+</div>
+
+<script>
+// ====== Storage helper (safe on file:// / restricted contexts) ======
+const store = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+};
+
+// ====== Your Finnhub key + cash (editable above, saved in this browser) ======
+const DEFAULT_KEY = "d9etr51r01qq0pmi317gd9etr51r01qq0pmi3180";
+let API_KEY = (store.get("finnhubKey") || DEFAULT_KEY);
+// Default cash plug ≈ gap between broker total (~$238k) and screenshot holdings (~$186k). Edit to your real cash.
+let CASH = parseFloat(store.get("cashAmt"));
+if(isNaN(CASH)) CASH = 52000;
+
+// ====== Holdings (cost basis derived from the two snapshots) ======
+const HOLDINGS = [
+  {symbol:"ETH",  name:"Ethereum",              type:"Crypto", sector:"Crypto",        shares:7.360575, cost:2360.06},
+  {symbol:"QQQ",  name:"Invesco QQQ Trust",     type:"ETF",    sector:"Index/Broad",   shares:38.81,    cost:611.54},
+  {symbol:"BABA", name:"Alibaba Group",         type:"Stock",  sector:"China Tech",    shares:189.36,   cost:78.37},
+  {symbol:"SOFI", name:"SoFi Technologies",     type:"Stock",  sector:"Fintech",       shares:250,      cost:16.00},
+  {symbol:"FRSH", name:"Freshworks",            type:"Stock",  sector:"Software",      shares:10,       cost:20.62},
+  {symbol:"SHOP", name:"Shopify",               type:"Stock",  sector:"Software",      shares:20,       cost:53.13},
+  {symbol:"NET",  name:"Cloudflare",            type:"Stock",  sector:"Software",      shares:50,       cost:66.62},
+  {symbol:"SNOW", name:"Snowflake",             type:"Stock",  sector:"Software",      shares:99,       cost:153.72},
+  {symbol:"MDB",  name:"MongoDB",               type:"Stock",  sector:"Software",      shares:12,       cost:292.97},
+  {symbol:"DDOG", name:"Datadog",               type:"Stock",  sector:"Software",      shares:53,       cost:94.39},
+  {symbol:"FLCH", name:"Franklin FTSE China ETF",type:"ETF",   sector:"China Tech",    shares:707.02,   cost:16.13},
+  {symbol:"OKLO", name:"Oklo Inc.",             type:"Stock",  sector:"Nuclear/Energy",shares:245,      cost:45.05},
+  {symbol:"SHNY", name:"Defiance Leveraged (SHNY)",type:"ETF", sector:"Leveraged",     shares:20,       cost:10.75},
+  {symbol:"RKLB", name:"Rocket Lab",            type:"Stock",  sector:"Space",         shares:100,      cost:55.96},
+  {symbol:"SQQQ", name:"ProShares UltraPro Short QQQ",type:"ETF",sector:"Inverse/Hedge",shares:2.83,    cost:74.69},
+  {symbol:"CRWD", name:"CrowdStrike",           type:"Stock",  sector:"Software",      shares:80,       cost:87.91},
+  {symbol:"MSFT", name:"Microsoft",             type:"Stock",  sector:"Software",      shares:15.03,    cost:386.06},
+  {symbol:"HOOD", name:"Robinhood",             type:"Stock",  sector:"Fintech",       shares:45,       cost:67.87},
+  {symbol:"CASH", name:"Cash / other (not in screenshots)",type:"Cash",sector:"Cash",  shares:null,     cost:null, cash:true},
+  {symbol:"RSX",  name:"VanEck Russia ETF (delisted)",type:"ETF",sector:"Frozen",      shares:138,      cost:null, frozen:true},
+  {symbol:"ASTS", name:"AST SpaceMobile (watch)",type:"Stock", sector:"Space",         shares:0,        cost:null, watch:true},
+];
+
+const SECTOR_COLORS = {
+  "Software":"#5b8cff","Index/Broad":"#7c5bff","China Tech":"#ff8f5b","Fintech":"#3fd07f",
+  "Crypto":"#f5c542","Nuclear/Energy":"#42c9d6","Space":"#e05bff","Leveraged":"#ff5d8f",
+  "Inverse/Hedge":"#9aa5b8","Cash":"#6b7686","Frozen":"#5f6b7e"
+};
+
+// ====== Data fetching (direct browser calls — no proxy, no CORS issues) ======
+async function fetchStock(sym){
+  const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${API_KEY}`, {cache:"no-store"});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const j = await r.json();               // {c,d,dp,h,l,o,pc,t}
+  if(j.c===0 && j.pc===0) throw new Error("no data");
+  return {price:j.c, prev:j.pc, dayPc:j.dp};
+}
+async function fetchETH(){
+  const spot = await (await fetch("https://api.coinbase.com/v2/prices/ETH-USD/spot", {cache:"no-store"})).json();
+  const price = parseFloat(spot.data.amount);
+  let prev = price;
+  try{
+    const d = new Date(Date.now()-864e5).toISOString().slice(0,10);
+    const y = await (await fetch("https://api.coinbase.com/v2/prices/ETH-USD/spot?date="+d, {cache:"no-store"})).json();
+    prev = parseFloat(y.data.amount) || price;
+  }catch(e){}
+  return {price, prev, dayPc: prev? (price-prev)/prev*100 : null};
+}
+
+let state = {};
+let sortKey = "mv", sortDir = -1;
+
+const $ = id => document.getElementById(id);
+const fmtUSD  = (n,d=2) => n==null||isNaN(n) ? "—" : "$"+n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtUSD0 = n => n==null||isNaN(n) ? "—" : "$"+Math.round(n).toLocaleString("en-US");
+const fmtPc   = n => n==null||isNaN(n) ? "—" : (n>=0?"+":"")+n.toFixed(2)+"%";
+const cls  = n => n>0?"up":n<0?"down":"flat";
+const sgnUSD0 = n => n==null||isNaN(n) ? "—" : (n>=0?"+":"−")+fmtUSD0(Math.abs(n));
+
+function computeRows(){
+  const rows=[];
+  for(const h of HOLDINGS){
+    if(h.cash){
+      rows.push({...h, price:null, prev:null, invested:null, mv:CASH, pnl:null, pnlPc:null, dayPc:null, dayAbs:null});
+      continue;
+    }
+    const st = state[h.symbol] || {};
+    const price = st.price, prev = st.prev;
+    const invested = (h.cost!=null && h.shares) ? h.cost*h.shares : null;
+    const mv = (price!=null && h.shares) ? price*h.shares : null;
+    const pnl = (mv!=null && invested!=null) ? mv-invested : null;
+    const pnlPc = (pnl!=null && invested) ? pnl/invested*100 : null;
+    const dayPc = st.dayPc!=null ? st.dayPc : ((price!=null && prev) ? (price-prev)/prev*100 : null);
+    const dayAbs = (price!=null && prev && h.shares) ? (price-prev)*h.shares : null;
+    rows.push({...h, price, prev, invested, mv, pnl, pnlPc, dayPc, dayAbs, err:st.err});
+  }
+  return rows;
+}
+
+function render(){
+  const rows = computeRows();
+  const active = rows.filter(r=>!r.frozen && !r.watch);
+  const totMv = active.reduce((s,r)=>s+(r.mv||0),0);
+  const totInv = active.reduce((s,r)=>s+(r.invested||0),0);
+  const totPnl = totMv - totInv - CASH;               // cash has no cost basis; exclude from P&L
+  const totDay = active.reduce((s,r)=>s+(r.dayAbs||0),0);
+  const prevTot = totMv-totDay;
+
+  $("kMv").textContent = fmtUSD0(totMv);
+  $("kInv").textContent = fmtUSD0(totInv);
+  $("kPnl").textContent = sgnUSD0(totPnl);
+  $("kPnl").className = "val "+cls(totPnl);
+  $("kPnlPc").textContent = totInv? fmtPc(totPnl/totInv*100) : "—";
+  $("kPnlPc").className = "sub "+cls(totPnl);
+  $("kDay").textContent = sgnUSD0(totDay);
+  $("kDay").className = "val "+cls(totDay);
+  $("kDayPc").textContent = prevTot? fmtPc(totDay/prevTot*100) : "—";
+  $("kDayPc").className = "sub "+cls(totDay);
+  const pricedCount = active.filter(r=>!r.cash && r.price!=null).length;
+  const investable = active.filter(r=>!r.cash).length;
+  $("kCount").textContent = pricedCount;
+  $("kCountSub").textContent = "of "+investable+" priced";
+
+  active.forEach(r=> r.weight = totMv? (r.mv||0)/totMv*100 : 0);
+
+  const sorted = [...rows].sort((a,b)=>{
+    if(a.frozen||a.watch) return 1; if(b.frozen||b.watch) return -1;
+    let av=a[sortKey], bv=b[sortKey];
+    if(sortKey==="symbol"){ return sortDir*String(a.symbol).localeCompare(b.symbol); }
+    av = av==null?-Infinity:av; bv = bv==null?-Infinity:bv;
+    return sortDir*(av-bv);
+  });
+
+  $("posBody").innerHTML = sorted.map(r=>{
+    if(r.cash){
+      return `<tr><td class="l"><span class="tick">${r.symbol}</span><span class="badge cash">CASH</span><div class="tname">${r.name}</div></td>
+        <td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td>
+        <td>${fmtUSD0(r.mv)}</td><td class="muted">—</td><td class="muted">—</td><td class="muted">${r.weight!=null?r.weight.toFixed(1)+"%":"—"}</td></tr>`;
+    }
+    if(r.frozen){
+      return `<tr style="opacity:.6"><td class="l"><span class="tick">${r.symbol}</span><span class="badge frozen">FROZEN</span><div class="tname">${r.name}</div></td>
+        <td class="muted">—</td><td class="muted">—</td><td>${r.shares}</td><td class="muted">n/a</td>
+        <td class="muted">n/a</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>`;
+    }
+    if(r.watch){
+      const px = r.price!=null?fmtUSD(r.price):`<span class="loading">…</span>`;
+      return `<tr style="opacity:.7"><td class="l"><span class="tick">${r.symbol}</span><span class="badge">WATCH</span><div class="tname">${r.name}</div></td>
+        <td>${px}</td><td class="${cls(r.dayPc)}">${fmtPc(r.dayPc)}</td>
+        <td>0</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>`;
+    }
+    const priceCell = r.err ? `<span class="err" title="${r.err}">err</span>` : (r.price!=null?fmtUSD(r.price):`<span class="loading">…</span>`);
+    return `<tr>
+      <td class="l"><span class="tick">${r.symbol}</span>${r.type==="Crypto"?'<span class="badge crypto">CRYPTO</span>':r.type==="ETF"?'<span class="badge">ETF</span>':''}<div class="tname">${r.name}</div></td>
+      <td>${priceCell}</td>
+      <td class="${cls(r.dayPc)}">${fmtPc(r.dayPc)}</td>
+      <td>${r.shares.toLocaleString("en-US",{maximumFractionDigits:4})}</td>
+      <td class="muted">${fmtUSD0(r.cost)}</td>
+      <td>${fmtUSD0(r.mv)}</td>
+      <td class="${cls(r.pnl)}">${sgnUSD0(r.pnl)}</td>
+      <td><span class="pill ${cls(r.pnl)}">${fmtPc(r.pnlPc)}</span></td>
+      <td class="muted">${r.weight!=null?r.weight.toFixed(1)+"%":"—"}</td>
+    </tr>`;
+  }).join("");
+
+  const allocRows = active.filter(r=>r.mv).sort((a,b)=>b.mv-a.mv);
+  $("allocList").innerHTML = allocRows.map(r=>{
+    const c = SECTOR_COLORS[r.sector]||"#5b8cff";
+    return `<div class="alloc-row"><div class="nm">${r.symbol}</div>
+      <div class="alloc-bar"><span style="width:${r.weight.toFixed(1)}%;background:${c}"></span></div>
+      <div class="pc">${r.weight.toFixed(1)}%</div></div>`;
+  }).join("");
+
+  const bySector={};
+  active.forEach(r=>{ if(r.mv){ bySector[r.sector]=(bySector[r.sector]||0)+r.mv; }});
+  $("secSplit").innerHTML = Object.entries(bySector).sort((a,b)=>b[1]-a[1]).map(([s,v])=>{
+    const c=SECTOR_COLORS[s]||"#5b8cff"; const pc=totMv?(v/totMv*100):0;
+    return `<div class="sec-chip"><span style="color:${c}">●</span> ${s} <b>${pc.toFixed(0)}%</b></div>`;
+  }).join("");
+
+  const priced = active.filter(r=>r.pnlPc!=null);
+  const win = [...priced].sort((a,b)=>b.pnlPc-a.pnlPc);
+  const top = win.slice(0,4), bot = win.slice(-3).reverse();
+  const item = r=>`<div class="wl-item"><span><b>${r.symbol}</b> <span class="muted">${fmtUSD(r.price)}</span></span>
+    <span class="${cls(r.pnlPc)}">${fmtPc(r.pnlPc)} · ${sgnUSD0(r.pnl)}</span></div>`;
+  $("winners").innerHTML = `<div class="muted" style="font-size:10.5px;letter-spacing:.5px;margin:2px 0 3px">▲ BEST</div>`
+    + top.map(item).join("")
+    + `<div class="muted" style="font-size:10.5px;letter-spacing:.5px;margin:8px 0 3px">▼ WORST</div>`
+    + bot.map(item).join("");
+
+  const flags=[];
+  const topEq = allocRows.filter(r=>!r.cash)[0];
+  if(topEq && topEq.weight>20) flags.push(`<b>${topEq.symbol}</b> is ${topEq.weight.toFixed(0)}% of the book — high single-name concentration.`);
+  const softwareW = totMv? (bySector["Software"]||0)/totMv*100 : 0;
+  if(softwareW>35) flags.push(`Software/SaaS is ${softwareW.toFixed(0)}% of the portfolio — sector concentration risk.`);
+  if(CASH>0){ const cw = totMv? CASH/totMv*100:0; flags.push(`<b>Cash / other</b> is ${fmtUSD0(CASH)} (${cw.toFixed(0)}%) — an editable placeholder; set it to your real broker cash or add missing positions.`); }
+  flags.push(`<b>RSX</b> (138 sh) is a delisted/frozen Russia ETF — effectively unrecoverable; excluded from totals.`);
+  const lev = active.filter(r=>["SQQQ","SHNY"].includes(r.symbol));
+  if(lev.length) flags.push(`Leveraged/inverse ETFs held (${lev.map(x=>x.symbol).join(", ")}) — these decay over time and aren't long-term holds.`);
+  const ethR = rows.find(r=>r.symbol==="ETH");
+  if(ethR && ethR.pnlPc!=null && ethR.pnlPc<0) flags.push(`<b>ETH</b> is your largest loss position (${fmtPc(ethR.pnlPc)}).`);
+  $("flags").innerHTML = flags.map(f=>`<div class="flag">⚠ <span>${f}</span></div>`).join("");
+
+  $("dataNote").textContent = `Priced ${pricedCount}/${investable} holdings this cycle.` + (pricedCount<investable?" Any “err” = that symbol didn't return — hit Refresh.":"");
+}
+
+function updateMarketStatus(){
+  const now = new Date();
+  const u = now.getUTCDay(), mins = now.getUTCHours()*60+now.getUTCMinutes();
+  const open = (u>=1 && u<=5) && mins>=810 && mins<1200; // NYSE 13:30–20:00 UTC (approx)
+  $("mktStatus").className = open?"mkt-open":"mkt-closed";
+  $("mktText").textContent = open ? "US market OPEN" : "US market closed";
+}
+
+let refreshing=false, countdown=60;
+async function refresh(){
+  if(refreshing) return;
+  refreshing=true;
+  $("refreshBtn").disabled=true; $("refreshBtn").textContent="↻ Loading…";
+  updateMarketStatus();
+  const jobs = HOLDINGS.filter(h=>!h.frozen && !h.cash).map(async h=>{
+    try{
+      const q = h.type==="Crypto" ? await fetchETH() : await fetchStock(h.symbol);
+      state[h.symbol] = {...q, err:null};
+    }catch(e){ state[h.symbol] = {...(state[h.symbol]||{}), err:e.message}; }
+  });
+  await Promise.all(jobs);
+  render();
+  $("updated").textContent = "Updated "+new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  refreshing=false;
+  $("refreshBtn").disabled=false; $("refreshBtn").textContent="↻ Refresh";
+  countdown=60;
+}
+
+function tick(){
+  countdown--;
+  $("nextRefresh").textContent = "· next in "+countdown+"s";
+  if(countdown<=0) refresh();
+}
+
+// key + cash bars
+function refreshKeyState(){
+  $("keyInput").value = API_KEY;
+  $("keyState").textContent = API_KEY ? "✓ set" : "not set";
+  $("keyState").style.color = API_KEY ? "var(--up)" : "var(--down)";
+  $("cashInput").value = CASH;
+}
+$("keySave").addEventListener("click",()=>{
+  API_KEY = $("keyInput").value.trim();
+  store.set("finnhubKey", API_KEY);
+  refreshKeyState(); refresh();
+});
+$("cashSave").addEventListener("click",()=>{
+  const v = parseFloat($("cashInput").value);
+  CASH = isNaN(v)?0:v;
+  store.set("cashAmt", String(CASH));
+  refreshKeyState(); render();
+});
+
+document.querySelectorAll("th[data-k]").forEach(th=>{
+  th.addEventListener("click",()=>{
+    const k=th.dataset.k;
+    if(sortKey===k) sortDir*=-1; else {sortKey=k; sortDir = k==="symbol"?1:-1;}
+    render();
+  });
+});
+$("refreshBtn").addEventListener("click",refresh);
+
+refreshKeyState();
+render();
+refresh();
+setInterval(tick,1000);
+updateMarketStatus();
+setInterval(updateMarketStatus,60000);
+</script>
+</body>
+</html>
