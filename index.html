@@ -80,6 +80,13 @@
   .sec-split{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px}
   .sec-chip{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:11px}
   .sec-chip b{font-variant-numeric:tabular-nums}
+  .tabs{display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+  .tab{padding:9px 18px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;user-select:none}
+  .tab:hover{color:var(--txt)}
+  .tab.active{color:var(--txt);border-bottom-color:var(--accent)}
+  .fund-note{font-size:12px;color:var(--muted);margin-bottom:14px}
+  .fund-foot{margin-top:14px;color:var(--dim);font-size:11px;line-height:1.6}
+  .g-up{color:var(--up)}.g-down{color:var(--down)}
 </style>
 </head>
 <body>
@@ -110,6 +117,12 @@
     <span style="margin-left:auto">Stocks/ETFs: Finnhub · ETH: Coinbase</span>
   </div>
 
+  <div class="tabs">
+    <div class="tab active" data-tab="pos">Positions</div>
+    <div class="tab" data-tab="fund">Fundamentals &amp; Risk</div>
+  </div>
+
+  <div id="view-positions">
   <div class="kpis" id="kpis">
     <div class="card"><div class="lbl">Market Value</div><div class="val" id="kMv">—</div><div class="sub muted" id="kMvSub">incl. cash</div></div>
     <div class="card"><div class="lbl">Total Invested</div><div class="val" id="kInv">—</div><div class="sub muted">cost basis</div></div>
@@ -156,6 +169,38 @@
         <div id="flags"></div>
       </div>
     </div>
+  </div>
+
+  </div><!-- /view-positions -->
+
+  <div id="view-fund" style="display:none">
+    <div class="fund-note" id="fundNote">Loading fundamentals…</div>
+    <div class="kpis">
+      <div class="card"><div class="lbl">Rev Growth · Annual</div><div class="val" id="fRevY">—</div><div class="sub muted">wtd TTM YoY</div></div>
+      <div class="card"><div class="lbl">Rev Growth · Quarterly</div><div class="val" id="fRevQ">—</div><div class="sub muted">wtd YoY</div></div>
+      <div class="card"><div class="lbl">Profit Growth · Annual</div><div class="val" id="fEpsY">—</div><div class="sub muted">wtd EPS TTM YoY</div></div>
+      <div class="card"><div class="lbl">Profit Growth · Quarterly</div><div class="val" id="fEpsQ">—</div><div class="sub muted">wtd EPS YoY</div></div>
+      <div class="card"><div class="lbl">Portfolio P/E</div><div class="val" id="fPE">—</div><div class="sub muted">profitable names</div></div>
+      <div class="card"><div class="lbl">Weighted EPS</div><div class="val" id="fEPS">—</div><div class="sub muted">TTM</div></div>
+      <div class="card"><div class="lbl">Portfolio Beta</div><div class="val" id="fBeta">—</div><div class="sub muted" id="fBetaCov">vs market</div></div>
+      <div class="card"><div class="lbl">Volatility (ann.)</div><div class="val" id="fVol">—</div><div class="sub muted" id="fVolSub">realized</div></div>
+      <div class="card"><div class="lbl">Sharpe</div><div class="val" id="fSharpe">—</div><div class="sub muted" id="fSharpeSub">Rf 4.5%</div></div>
+      <div class="card"><div class="lbl">Sortino</div><div class="val" id="fSortino">—</div><div class="sub muted">downside risk</div></div>
+      <div class="card"><div class="lbl">Max Drawdown</div><div class="val" id="fMDD">—</div><div class="sub muted" id="fMDDSub">since tracking</div></div>
+    </div>
+    <div class="panel">
+      <h2>Per-holding fundamentals <small>individual stocks · Finnhub TTM</small></h2>
+      <div style="overflow-x:auto">
+        <table id="fundTable">
+          <thead><tr>
+            <th class="l">Ticker</th><th>Wt</th><th>P/E</th><th>Fwd P/E</th><th>EPS TTM</th>
+            <th>Rev YoY</th><th>Rev QoQ</th><th>EPS YoY</th><th>EPS QoQ</th><th>Net margin</th><th>Beta</th>
+          </tr></thead>
+          <tbody id="fundBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="fund-foot" id="fundFoot"></div>
   </div>
 
   <footer>
@@ -367,6 +412,9 @@ function render(){
   $("flags").innerHTML = flags.map(f=>`<div class="flag">⚠ <span>${f}</span></div>`).join("");
 
   $("dataNote").textContent = `Priced ${pricedCount}/${investable} holdings this cycle.` + (pricedCount<investable?" Any “err” = that symbol didn't return — hit Refresh.":"");
+
+  recordValue(totMv);
+  if(fundLoaded) renderFund();
 }
 
 function updateMarketStatus(){
@@ -430,6 +478,142 @@ document.querySelectorAll("th[data-k]").forEach(th=>{
   });
 });
 $("refreshBtn").addEventListener("click",refresh);
+
+// ===== Fundamentals & Risk =====
+const fund={}; let fundLoaded=false, fundLoading=false;
+const METRIC_SYMS = HOLDINGS.filter(h=>!h.cash && !h.frozen && h.shares>0 && h.type!=="Crypto").map(h=>h.symbol);
+const numf = x => (x==null||isNaN(+x))?null:+x;
+const fmtG = v => v==null?"—":(v>=0?"+":"")+v.toFixed(1)+"%";
+const gcls = v => v==null?"muted":v>=0?"g-up":"g-down";
+
+async function fetchMetric(sym){
+  const j=await (await fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(sym)}&metric=all&token=${API_KEY}`,{cache:"no-store"})).json();
+  return j.metric||{};
+}
+async function loadFundamentals(){
+  if(fundLoading||fundLoaded) return;
+  fundLoading=true;
+  $("fundNote").textContent = `Loading fundamentals for ${METRIC_SYMS.length} holdings from Finnhub…`;
+  await Promise.all(METRIC_SYMS.map(async s=>{ try{ fund[s]=await fetchMetric(s); }catch(e){ fund[s]={__err:e.message}; } }));
+  fundLoaded=true; fundLoading=false;
+  renderFund();
+}
+
+function recordValue(v){
+  if(!(v>0)) return;
+  let arr=[]; try{ arr=JSON.parse(store.get("valHist")||"[]"); }catch(e){}
+  const today=new Date().toISOString().slice(0,10);
+  if(arr.length && arr[arr.length-1].d===today) arr[arr.length-1].v=v;
+  else arr.push({d:today,v:v});
+  if(arr.length>1000) arr=arr.slice(-1000);
+  store.set("valHist", JSON.stringify(arr));
+}
+
+function riskFromHist(){
+  let arr=[]; try{ arr=JSON.parse(store.get("valHist")||"[]"); }catch(e){}
+  if(arr.length<2) return {days:arr.length, start:arr[0] && arr[0].d};
+  const rets=[];
+  for(let i=1;i<arr.length;i++){ if(arr[i-1].v>0) rets.push(arr[i].v/arr[i-1].v-1); }
+  const n=rets.length;
+  const mean=rets.reduce((a,b)=>a+b,0)/n;
+  const varc=rets.reduce((a,b)=>a+(b-mean)**2,0)/Math.max(1,n-1);
+  const sd=Math.sqrt(varc);
+  const dd=Math.sqrt(rets.filter(r=>r<0).reduce((a,b)=>a+b*b,0)/Math.max(1,n));
+  const annRet=mean*252, annVol=sd*Math.sqrt(252), annDD=dd*Math.sqrt(252), Rf=0.045;
+  let peak=arr[0].v, mdd=0;
+  arr.forEach(p=>{ if(p.v>peak) peak=p.v; const g=p.v/peak-1; if(g<mdd) mdd=g; });
+  return {days:arr.length, start:arr[0].d, vol:annVol, mdd,
+    sharpe:annVol>0?(annRet-Rf)/annVol:null, sortino:annDD>0?(annRet-Rf)/annDD:null};
+}
+
+function renderFund(){
+  let equityMv=0, betaWsum=0, betaCovMv=0, totNonCashMv=0;
+  const rows=[];
+  HOLDINGS.forEach(h=>{
+    if(h.cash||h.frozen||!h.shares) return;
+    const st=state[h.symbol]||{};
+    const mv=(st.price!=null)? st.price*h.shares : 0;
+    if(h.type!=="Crypto") totNonCashMv+=mv;
+    const m=fund[h.symbol]||{};
+    const beta=numf(m.beta);
+    if(beta!=null && h.type!=="Crypto"){ betaWsum+=mv*beta; betaCovMv+=mv; }
+    if(h.type==="Stock"){ equityMv+=mv; rows.push({h,mv,m}); }
+  });
+  rows.sort((a,b)=>b.mv-a.mv);
+  let wRevY=0,wRevQ=0,wEpsY=0,wEpsQ=0,wEPS=0,peDenom=0,profMv=0;
+  const CAP=v=>Math.max(-100,Math.min(100,v));   // clamp per-name growth so microcaps don't distort the blend
+  rows.forEach(r=>{
+    const w=equityMv?r.mv/equityMv:0, m=r.m;
+    const revY=numf(m.revenueGrowthTTMYoy), revQ=numf(m.revenueGrowthQuarterlyYoy);
+    const epsY=numf(m.epsGrowthTTMYoy), epsQ=numf(m.epsGrowthQuarterlyYoy);
+    const eps=numf(m.epsTTM), pe=numf(m.peTTM);
+    if(revY!=null) wRevY+=w*CAP(revY);
+    if(revQ!=null) wRevQ+=w*CAP(revQ);
+    if(epsY!=null) wEpsY+=w*CAP(epsY);
+    if(epsQ!=null) wEpsQ+=w*CAP(epsQ);
+    if(eps!=null) wEPS+=w*eps;
+    if(pe!=null && pe>0){ peDenom+=r.mv/pe; profMv+=r.mv; }
+  });
+  const portPE=peDenom>0?profMv/peDenom:null;
+  const portBeta=betaCovMv>0?betaWsum/betaCovMv:null;
+
+  $("fRevY").textContent=fmtG(wRevY); $("fRevY").className="val "+gcls(wRevY);
+  $("fRevQ").textContent=fmtG(wRevQ); $("fRevQ").className="val "+gcls(wRevQ);
+  $("fEpsY").textContent=fmtG(wEpsY); $("fEpsY").className="val "+gcls(wEpsY);
+  $("fEpsQ").textContent=fmtG(wEpsQ); $("fEpsQ").className="val "+gcls(wEpsQ);
+  $("fPE").textContent=portPE!=null?portPE.toFixed(1)+"×":"—";
+  $("fEPS").textContent=wEPS?("$"+wEPS.toFixed(2)):"—";
+  $("fBeta").textContent=portBeta!=null?portBeta.toFixed(2):"—";
+  $("fBetaCov").textContent = totNonCashMv? ("covers "+Math.round(betaCovMv/totNonCashMv*100)+"% of equities"):"vs S&P 500";
+
+  const risk=riskFromHist();
+  if(risk.sharpe!=null && risk.days>=6){
+    $("fVol").textContent=(risk.vol*100).toFixed(1)+"%";
+    $("fSharpe").textContent=risk.sharpe.toFixed(2);
+    $("fSortino").textContent=risk.sortino!=null?risk.sortino.toFixed(2):"—";
+    $("fMDD").textContent=(risk.mdd*100).toFixed(1)+"%";
+    $("fVolSub").textContent="realized · "+risk.days+"d";
+    $("fMDDSub").textContent="since "+risk.start;
+  } else {
+    const nd=risk.days||0;
+    ["fVol","fSharpe","fSortino","fMDD"].forEach(id=>$(id).textContent="—");
+    $("fVolSub").textContent="building "+nd+"/6 days";
+    $("fMDDSub").textContent="needs history";
+    $("fSharpeSub").textContent="builds daily";
+  }
+
+  const pct=v=>`<td class="${gcls(v)}">${fmtG(v)}</td>`;
+  $("fundBody").innerHTML = rows.map(r=>{
+    const m=r.m, w=equityMv?r.mv/equityMv*100:0;
+    if(m.__err) return `<tr><td class="l"><b>${r.h.symbol}</b></td><td class="muted">${w.toFixed(1)}%</td><td class="err">metric error</td><td colspan="8"></td></tr>`;
+    const pe=numf(m.peTTM), fpe=numf(m.forwardPE), eps=numf(m.epsTTM), nm=numf(m.netProfitMarginTTM), beta=numf(m.beta);
+    return `<tr>
+      <td class="l"><b>${r.h.symbol}</b></td>
+      <td class="muted">${w.toFixed(1)}%</td>
+      <td>${pe!=null?pe.toFixed(1):"—"}</td>
+      <td class="muted">${fpe!=null?fpe.toFixed(1):"—"}</td>
+      <td>${eps!=null?"$"+eps.toFixed(2):"—"}</td>
+      ${pct(numf(m.revenueGrowthTTMYoy))}
+      ${pct(numf(m.revenueGrowthQuarterlyYoy))}
+      ${pct(numf(m.epsGrowthTTMYoy))}
+      ${pct(numf(m.epsGrowthQuarterlyYoy))}
+      <td class="muted">${nm!=null?nm.toFixed(1)+"%":"—"}</td>
+      <td>${beta!=null?beta.toFixed(2):"—"}</td>
+    </tr>`;
+  }).join("");
+
+  $("fundNote").textContent = `Fundamentals across ${rows.length} individual stocks (ETFs, ETH, cash excluded). Growth is market-value-weighted, Finnhub TTM. Weights use live prices.`;
+  $("fundFoot").innerHTML = `Growth = trailing-twelve-month year-over-year, market-value-weighted across the equity sleeve. <b>Per-name growth is capped at ±100% when blending</b> so microcaps (e.g. QUBT, IREN, SOFI) don't distort the portfolio figure — the table above shows each stock's true uncapped values. Portfolio P/E is earnings-weighted over profitable holdings only (ΣMV ÷ Σ earnings). Beta is market-value-weighted across covered holdings. <b>Volatility, Sharpe, Sortino and max-drawdown build from this tracker's own daily NAV</b> (saved in your browser) — they populate after ~6 days of visits and sharpen over time. Full multi-year Sharpe/Sortino needs a historical-price source (Finnhub candles are premium); can be wired to a free historical key on request.`;
+}
+
+// tab switching
+function showTab(name){
+  $("view-positions").style.display = name==="pos"?"":"none";
+  $("view-fund").style.display = name==="fund"?"":"none";
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.tab===name));
+  if(name==="fund"){ if(!fundLoaded) loadFundamentals(); else renderFund(); }
+}
+document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click",()=>showTab(t.dataset.tab)));
 
 refreshKeyState();
 render();
