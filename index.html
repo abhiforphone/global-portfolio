@@ -174,9 +174,9 @@ const store = {
 // ====== Your Finnhub key + cash (editable above, saved in this browser) ======
 const DEFAULT_KEY = "d9etr51r01qq0pmi317gd9etr51r01qq0pmi3180";
 let API_KEY = (store.get("finnhubKey") || DEFAULT_KEY);
-// Default cash plug ≈ gap between broker total (~$238k) and screenshot holdings (~$186k). Edit to your real cash.
+// Cash plug ≈ broker total minus explicit holdings. Reduced by ~$20k on 2026-07-20 as 5 new buys were added. Edit to your real cash.
 let CASH = parseFloat(store.get("cashAmt"));
-if(isNaN(CASH)) CASH = 52000;
+if(isNaN(CASH)) CASH = 31992;
 
 // ====== Holdings (cost basis derived from the two snapshots) ======
 const HOLDINGS = [
@@ -191,13 +191,16 @@ const HOLDINGS = [
   {symbol:"MDB",  name:"MongoDB",               type:"Stock",  sector:"Software",      shares:12,       cost:292.97},
   {symbol:"DDOG", name:"Datadog",               type:"Stock",  sector:"Software",      shares:53,       cost:94.39},
   {symbol:"FLCH", name:"Franklin FTSE China ETF",type:"ETF",   sector:"China Tech",    shares:707.02,   cost:16.13},
-  {symbol:"OKLO", name:"Oklo Inc.",             type:"Stock",  sector:"Nuclear/Energy",shares:245,      cost:45.05},
+  {symbol:"OKLO", name:"Oklo Inc.",             type:"Stock",  sector:"Nuclear/Energy",shares:290,      cost:44.42},
   {symbol:"SHNY", name:"Defiance Leveraged (SHNY)",type:"ETF", sector:"Leveraged",     shares:20,       cost:10.75},
-  {symbol:"RKLB", name:"Rocket Lab",            type:"Stock",  sector:"Space",         shares:100,      cost:55.96},
+  {symbol:"RKLB", name:"Rocket Lab",            type:"Stock",  sector:"Space",         shares:150,      cost:59.94},
   {symbol:"SQQQ", name:"ProShares UltraPro Short QQQ",type:"ETF",sector:"Inverse/Hedge",shares:2.83,    cost:74.69},
   {symbol:"CRWD", name:"CrowdStrike",           type:"Stock",  sector:"Software",      shares:80,       cost:87.91},
   {symbol:"MSFT", name:"Microsoft",             type:"Stock",  sector:"Software",      shares:15.03,    cost:386.06},
   {symbol:"HOOD", name:"Robinhood",             type:"Stock",  sector:"Fintech",       shares:45,       cost:67.87},
+  {symbol:"CRWV", name:"CoreWeave",             type:"Stock",  sector:"AI/Cloud",      shares:70,       cost:75.55},
+  {symbol:"IREN", name:"IREN Ltd",              type:"Stock",  sector:"Miners/AI",     shares:150,      cost:36.60},
+  {symbol:"QUBT", name:"Quantum Computing Inc", type:"Stock",  sector:"Quantum",       shares:500,      cost:7.98},
   {symbol:"CASH", name:"Cash / other (not in screenshots)",type:"Cash",sector:"Cash",  shares:null,     cost:null, cash:true},
   {symbol:"RSX",  name:"VanEck Russia ETF (delisted)",type:"ETF",sector:"Frozen",      shares:138,      cost:null, frozen:true},
   {symbol:"ASTS", name:"AST SpaceMobile (watch)",type:"Stock", sector:"Space",         shares:0,        cost:null, watch:true},
@@ -206,6 +209,7 @@ const HOLDINGS = [
 const SECTOR_COLORS = {
   "Software":"#5b8cff","Index/Broad":"#7c5bff","China Tech":"#ff8f5b","Fintech":"#3fd07f",
   "Crypto":"#f5c542","Nuclear/Energy":"#42c9d6","Space":"#e05bff","Leveraged":"#ff5d8f",
+  "AI/Cloud":"#a78bfa","Miners/AI":"#fb923c","Quantum":"#2dd4bf",
   "Inverse/Hedge":"#9aa5b8","Cash":"#6b7686","Frozen":"#5f6b7e"
 };
 
