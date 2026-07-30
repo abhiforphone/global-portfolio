@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
 <title>Global Portfolio — Live Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#0b0e14; --panel:#141922; --panel2:#1b2230; --line:#232c3b;
@@ -200,6 +201,10 @@
       <div class="card"><div class="lbl">You vs Nasdaq</div><div class="val g-up">+$32,895</div><div class="sub g-up">+16.1% ahead</div></div>
       <div class="card"><div class="lbl">Nasdaq Sharpe · Sortino</div><div class="val">0.60 · 0.99</div><div class="sub muted">6y benchmark</div></div>
       <div class="card"><div class="lbl">Nasdaq Vol · MaxDD</div><div class="val">20% · −33%</div><div class="sub muted">6y benchmark</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:16px">
+      <h2>Growth of your deposits — you vs Nasdaq <small>QQQ dividend-adjusted · Aug 2020→now</small></h2>
+      <div style="height:340px;padding:12px 14px"><canvas id="navChart"></canvas></div>
     </div>
     <div class="panel">
       <h2>Per-holding fundamentals <small>individual stocks · Finnhub TTM</small></h2>
@@ -693,13 +698,35 @@ function renderFund(){
   $("fundFoot").innerHTML = `Growth = trailing-twelve-month year-over-year, market-value-weighted across the equity sleeve. <b>Per-name growth is capped at ±100% when blending</b> so microcaps (e.g. QUBT, IREN, SOFI) don't distort the portfolio figure — the table above shows each stock's true uncapped values. Portfolio P/E is earnings-weighted over profitable holdings only (ΣMV ÷ Σ earnings). Beta is market-value-weighted across covered holdings. <b>Volatility, Sharpe, Sortino and max-drawdown build from this tracker's own daily NAV</b> (saved in your browser) — they populate after ~6 days of visits and sharpen over time. Full multi-year Sharpe/Sortino needs a historical-price source (Finnhub candles are premium); can be wired to a free historical key on request.`;
 }
 
+// You-vs-Nasdaq chart (static, computed 2026-07 from deposits × QQQ history)
+let navChartDone=false;
+function renderNavChart(){
+  if(navChartDone || typeof Chart==="undefined") return;
+  const L=["2020-08","2020-09","2020-10","2020-11","2020-12","2021-01","2021-02","2021-03","2021-04","2021-05","2021-06","2021-07","2021-08","2021-09","2021-10","2021-11","2021-12","2022-01","2022-02","2022-03","2022-04","2022-05","2022-06","2022-07","2022-08","2022-09","2022-10","2022-11","2022-12","2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07"];
+  const C=[50,4050,8050,8050,8050,11550,11550,16550,20050,20050,19850,19850,20350,22350,22850,22850,4200,5200,5200,10700,12700,18700,18700,18700,18700,18700,20700,22700,22700,22700,22700,22700,25700,25700,35700,35700,35700,35700,35700,35700,35700,35700,35700,35700,35700,35700,35700,35700,35700,35700,39450,42450,46200,49950,51450,57450,63450,70950,74700,77700,81450,87450,94700,101700,109700,116700,123700,131700,133200,133200,133200,133200];
+  const Q=[50,4047,7924,8813,9245,12770,12753,17972,22534,22263,23457,24128,25646,26189,28748,29322,11010,11047,10552,16545,16296,22037,20074,22594,21434,19176,21943,25159,22892,25328,25237,27633,30773,33199,45292,47040,46342,43988,43080,47741,50408,51325,54036,54725,52332,55551,59145,58153,58795,60336,63565,69966,74033,79385,78739,78766,85866,101247,111462,117164,122032,134592,148276,152962,159937,168905,171945,171626,200054,221197,220867,204392];
+  const act=L.map((_,i)=>i===L.length-1?237287:null);
+  new Chart(document.getElementById("navChart"),{type:"line",
+    data:{labels:L,datasets:[
+      {label:"Your deposits",data:C,borderColor:"#5f6b7e",borderDash:[5,4],borderWidth:1.5,pointRadius:0,tension:.1},
+      {label:"If in Nasdaq (QQQ)",data:Q,borderColor:"#5b8cff",borderWidth:2,pointRadius:0,tension:.15},
+      {label:"Your actual (today)",data:act,borderColor:"#3fd07f",backgroundColor:"#3fd07f",pointRadius:L.map((_,i)=>i===L.length-1?7:0),showLine:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      plugins:{legend:{labels:{color:"#e6ebf2",usePointStyle:true,boxWidth:8,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+": $"+(c.parsed.y!=null?c.parsed.y.toLocaleString():"—")}}},
+      scales:{x:{ticks:{color:"#8b96a8",maxTicksLimit:12,callback:function(v){const l=this.getLabelForValue(v);return (l.endsWith("-01")||l.endsWith("-07"))?l:"";}},grid:{color:"rgba(35,44,59,.5)"}},
+        y:{ticks:{color:"#8b96a8",callback:v=>"$"+(v/1000)+"k"},grid:{color:"rgba(35,44,59,.5)"}}}}});
+  navChartDone=true;
+}
+
 // tab switching
 function showTab(name){
   $("view-positions").style.display = name==="pos"?"":"none";
   $("view-fund").style.display = name==="fund"?"":"none";
   $("view-scen").style.display = name==="scen"?"":"none";
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.tab===name));
-  if(name==="fund"){ if(!fundLoaded) loadFundamentals(); else renderFund(); }
+  if(name==="fund"){ if(!fundLoaded) loadFundamentals(); else renderFund(); renderNavChart(); }
   if(name==="scen"){ if(!fundLoaded) loadFundamentals(); else renderScenarios(); }
 }
 document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click",()=>showTab(t.dataset.tab)));
