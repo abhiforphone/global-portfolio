@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
 <title>Global Portfolio — Live Tracker</title>
 <style>
   :root{
@@ -87,6 +88,9 @@
   .fund-note{font-size:12px;color:var(--muted);margin-bottom:14px}
   .fund-foot{margin-top:14px;color:var(--dim);font-size:11px;line-height:1.6}
   .g-up{color:var(--up)}.g-down{color:var(--down)}
+  .scen-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:16px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+  .scen-controls label{display:flex;flex-direction:column;gap:4px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+  .scen-controls input,.scen-controls select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:5px 8px;font-size:12px;width:120px;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -120,6 +124,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="pos">Positions</div>
     <div class="tab" data-tab="fund">Fundamentals &amp; Risk</div>
+    <div class="tab" data-tab="scen">Scenarios</div>
   </div>
 
   <div id="view-positions">
@@ -203,6 +208,33 @@
     <div class="fund-foot" id="fundFoot"></div>
   </div>
 
+  <div id="view-scen" style="display:none">
+    <div class="fund-note">Bottom-up 3-scenario projection off your live holdings. <b>Each individual stock compounds at its own live revenue growth</b> (capped), ETFs at a market rate, ETH at its own rate, cash flat — then a valuation (P/S multiple) change is applied only to the stock sleeve. Edit any input and Recompute.</div>
+    <div class="scen-controls">
+      <label>Horizon (yrs)<input id="scYears" type="number" value="3" min="1" max="10" step="1"></label>
+      <label>Growth source<select id="scMode"><option value="live">Each holding's live growth</option><option value="override">Single CAGR override</option></select></label>
+      <label>Cap stock growth %<input id="scCap" type="number" value="40" step="5"></label>
+      <label>Override CAGR %<input id="scOverride" type="number" value="30" step="1"></label>
+      <label>ETF / market CAGR %<input id="scEtf" type="number" value="8" step="1"></label>
+      <label>ETH CAGR %<input id="scEth" type="number" value="15" step="5"></label>
+      <label>Bull · P/S Δ%<input id="scBull" type="number" value="10" step="5"></label>
+      <label>Base · P/S Δ%<input id="scBase" type="number" value="-30" step="5"></label>
+      <label>Bear · P/S Δ%<input id="scBear" type="number" value="-55" step="5"></label>
+      <button id="scRun" class="refresh">↻ Recompute</button>
+    </div>
+    <div class="kpis" id="scenCards"></div>
+    <div class="panel">
+      <h2>Scenario detail <small>segment breakdown</small></h2>
+      <div style="overflow-x:auto">
+        <table id="scenTable">
+          <thead><tr><th class="l">Scenario</th><th>P/S Δ (stocks)</th><th>Growth stocks</th><th>ETFs</th><th>ETH</th><th>Cash</th><th>Total</th><th>vs now</th></tr></thead>
+          <tbody id="scenBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="fund-foot">Revenue growth ≠ price. The <b>P/S Δ</b> is the assumed change in the valuation multiple applied to the individual-stock sleeve over the horizon — the dominant swing factor, and why the bear case can be flat-to-down even if revenue keeps compounding. Growth is capped per name so microcaps don't distort the total. Illustrative only, not investment advice.</div>
+  </div>
+
   <footer>
     <div><b>Cost basis</b> is derived from the two portfolio snapshots you provided (current value − gain ÷ shares); it is an estimate accurate to the rounding of those figures. <b>Cash / other</b> is an editable line for cash or positions not in the screenshots, so the total reconciles to your broker. Live US stock/ETF quotes come from Finnhub (your key), ETH from Coinbase — both fetched directly in your browser. This is a tracking tool, not investment advice.</div>
     <div style="margin-top:6px" id="dataNote"></div>
@@ -221,32 +253,35 @@ const DEFAULT_KEY = "d9etr51r01qq0pmi317gd9etr51r01qq0pmi3180";
 let API_KEY = (store.get("finnhubKey") || DEFAULT_KEY);
 // Cash plug ≈ broker total minus explicit holdings. Reduced by ~$20k on 2026-07-20 as 5 new buys were added. Edit to your real cash.
 let CASH = parseFloat(store.get("cashAmt"));
-if(isNaN(CASH)) CASH = 31992;
+if(isNaN(CASH)) CASH = 50300;
 
 // ====== Holdings (cost basis derived from the two snapshots) ======
 const HOLDINGS = [
-  {symbol:"ETH",  name:"Ethereum",              type:"Crypto", sector:"Crypto",        shares:7.360575, cost:2360.06},
-  {symbol:"QQQ",  name:"Invesco QQQ Trust",     type:"ETF",    sector:"Index/Broad",   shares:38.81,    cost:611.54},
-  {symbol:"BABA", name:"Alibaba Group",         type:"Stock",  sector:"China Tech",    shares:189.36,   cost:78.37},
-  {symbol:"SOFI", name:"SoFi Technologies",     type:"Stock",  sector:"Fintech",       shares:250,      cost:16.00},
+  {symbol:"ETH",  name:"Ethereum",              type:"Crypto", sector:"Crypto",        shares:7.571616, cost:2349.86},
+  {symbol:"QQQ",  name:"Invesco QQQ Trust",     type:"ETF",    sector:"Index/Broad",   shares:38.81,    cost:611.76},
+  {symbol:"BABA", name:"Alibaba Group",         type:"Stock",  sector:"China Tech",    shares:189.36,   cost:78.31},
+  {symbol:"SOFI", name:"SoFi Technologies",     type:"Stock",  sector:"Fintech",       shares:250,      cost:16.02},
   {symbol:"FRSH", name:"Freshworks",            type:"Stock",  sector:"Software",      shares:10,       cost:20.62},
-  {symbol:"SHOP", name:"Shopify",               type:"Stock",  sector:"Software",      shares:20,       cost:53.13},
+  {symbol:"SHOP", name:"Shopify",               type:"Stock",  sector:"Software",      shares:20,       cost:52.99},
   {symbol:"NET",  name:"Cloudflare",            type:"Stock",  sector:"Software",      shares:50,       cost:66.62},
-  {symbol:"SNOW", name:"Snowflake",             type:"Stock",  sector:"Software",      shares:99,       cost:153.72},
-  {symbol:"MDB",  name:"MongoDB",               type:"Stock",  sector:"Software",      shares:12,       cost:292.97},
-  {symbol:"DDOG", name:"Datadog",               type:"Stock",  sector:"Software",      shares:53,       cost:94.39},
-  {symbol:"FLCH", name:"Franklin FTSE China ETF",type:"ETF",   sector:"China Tech",    shares:707.02,   cost:16.13},
-  {symbol:"OKLO", name:"Oklo Inc.",             type:"Stock",  sector:"Nuclear/Energy",shares:290,      cost:44.42},
+  {symbol:"SNOW", name:"Snowflake",             type:"Stock",  sector:"Software",      shares:99,       cost:153.75},
+  {symbol:"MDB",  name:"MongoDB",               type:"Stock",  sector:"Software",      shares:12,       cost:293.35},
+  {symbol:"DDOG", name:"Datadog",               type:"Stock",  sector:"Software",      shares:53,       cost:94.31},
+  {symbol:"FLCH", name:"Franklin FTSE China ETF",type:"ETF",   sector:"China Tech",    shares:707.02,   cost:16.14},
+  {symbol:"OKLO", name:"Oklo Inc.",             type:"Stock",  sector:"Nuclear/Energy",shares:245,      cost:45.05},
   {symbol:"SHNY", name:"Defiance Leveraged (SHNY)",type:"ETF", sector:"Leveraged",     shares:20,       cost:10.75},
-  {symbol:"RKLB", name:"Rocket Lab",            type:"Stock",  sector:"Space",         shares:150,      cost:59.94},
-  {symbol:"SQQQ", name:"ProShares UltraPro Short QQQ",type:"ETF",sector:"Inverse/Hedge",shares:2.83,    cost:74.69},
-  {symbol:"CRWD", name:"CrowdStrike",           type:"Stock",  sector:"Software",      shares:80,       cost:87.91},
-  {symbol:"MSFT", name:"Microsoft",             type:"Stock",  sector:"Software",      shares:15.03,    cost:386.06},
-  {symbol:"HOOD", name:"Robinhood",             type:"Stock",  sector:"Fintech",       shares:45,       cost:67.87},
-  {symbol:"CRWV", name:"CoreWeave",             type:"Stock",  sector:"AI/Cloud",      shares:70,       cost:75.55},
-  {symbol:"IREN", name:"IREN Ltd",              type:"Stock",  sector:"Miners/AI",     shares:150,      cost:36.60},
-  {symbol:"QUBT", name:"Quantum Computing Inc", type:"Stock",  sector:"Quantum",       shares:500,      cost:7.98},
-  {symbol:"CASH", name:"Cash / other (not in screenshots)",type:"Cash",sector:"Cash",  shares:null,     cost:null, cash:true},
+  {symbol:"RKLB", name:"Rocket Lab",            type:"Stock",  sector:"Space",         shares:100,      cost:55.96},
+  {symbol:"SQQQ", name:"ProShares UltraPro Short QQQ",type:"ETF",sector:"Inverse/Hedge",shares:2.83,    cost:74.60},
+  {symbol:"CRWD", name:"CrowdStrike",           type:"Stock",  sector:"Software",      shares:80,       cost:87.87},
+  {symbol:"MSFT", name:"Microsoft",             type:"Stock",  sector:"Software",      shares:15.03,    cost:386.05},
+  {symbol:"HOOD", name:"Robinhood",             type:"Stock",  sector:"Fintech",       shares:45,       cost:67.99},
+  {symbol:"NOW",  name:"ServiceNow",            type:"Stock",  sector:"Software",      shares:45,       cost:95.45},
+  {symbol:"PBLS", name:"PBLS",                  type:"Stock",  sector:"Other",         shares:200,      cost:27.69},
+  {symbol:"QUBT", name:"Quantum Computing Inc", type:"Stock",  sector:"Quantum",       shares:500,      cost:7.97},
+  {symbol:"IREN", name:"IREN Ltd",              type:"Stock",  sector:"Miners/AI",     shares:150,      cost:36.69},
+  {symbol:"CRWV", name:"CoreWeave",             type:"Stock",  sector:"AI/Cloud",      shares:70,       cost:75.79},
+  {symbol:"ISRG", name:"Intuitive Surgical",    type:"Stock",  sector:"Healthcare",    shares:12,       cost:358.85},
+  {symbol:"CASH", name:"Cash / other",          type:"Cash",   sector:"Cash",          shares:null,     cost:null, cash:true},
   {symbol:"RSX",  name:"VanEck Russia ETF (delisted)",type:"ETF",sector:"Frozen",      shares:138,      cost:null, frozen:true},
   {symbol:"ASTS", name:"AST SpaceMobile (watch)",type:"Stock", sector:"Space",         shares:0,        cost:null, watch:true},
 ];
@@ -255,7 +290,7 @@ const SECTOR_COLORS = {
   "Software":"#5b8cff","Index/Broad":"#7c5bff","China Tech":"#ff8f5b","Fintech":"#3fd07f",
   "Crypto":"#f5c542","Nuclear/Energy":"#42c9d6","Space":"#e05bff","Leveraged":"#ff5d8f",
   "AI/Cloud":"#a78bfa","Miners/AI":"#fb923c","Quantum":"#2dd4bf",
-  "Inverse/Hedge":"#9aa5b8","Cash":"#6b7686","Frozen":"#5f6b7e"
+  "Inverse/Hedge":"#9aa5b8","Healthcare":"#4ade80","Other":"#94a3b8","Cash":"#6b7686","Frozen":"#5f6b7e"
 };
 
 // ====== Data fetching (direct browser calls — no proxy, no CORS issues) ======
@@ -497,7 +532,51 @@ async function loadFundamentals(){
   await Promise.all(METRIC_SYMS.map(async s=>{ try{ fund[s]=await fetchMetric(s); }catch(e){ fund[s]={__err:e.message}; } }));
   fundLoaded=true; fundLoading=false;
   renderFund();
+  renderScenarios();
 }
+
+// ===== Scenario projection (bottom-up, each stock at its own growth) =====
+function projValue(p){
+  let base=0, grow=0, etf=0, eth=0, cash=0;
+  HOLDINGS.forEach(h=>{
+    if(h.frozen) return;
+    let mv;
+    if(h.cash){ mv=CASH; }
+    else { if(!h.shares) return; const st=state[h.symbol]||{}; mv = st.price!=null? st.price*h.shares : 0; }
+    base+=mv;
+    if(h.cash){ cash+=mv; return; }
+    if(h.type==="Crypto"){ eth += mv*Math.pow(1+p.eth/100, p.years); return; }
+    if(h.type==="ETF"){ etf += mv*Math.pow(1+p.etf/100, p.years); return; }
+    // individual stock
+    let g;
+    if(p.mode==="override") g=p.override/100;
+    else { const rg=numf((fund[h.symbol]||{}).revenueGrowthTTMYoy); g=(rg!=null?Math.min(p.cap,Math.max(-50,rg)):p.etf)/100; }
+    grow += mv*Math.pow(1+g, p.years)*(1+p.mult/100);
+  });
+  return {base, grow, etf, eth, cash, total:grow+etf+eth+cash};
+}
+
+function renderScenarios(){
+  const gv = id => +$(id).value;
+  const cfg = {years:gv("scYears")||3, mode:$("scMode").value, cap:gv("scCap"), override:gv("scOverride"), etf:gv("scEtf"), eth:gv("scEth")};
+  const cur = projValue({...cfg, mult:0}).base;
+  const defs = [["Bull",gv("scBull"),"g-up"],["Base",gv("scBase"),"var(--accent)"],["Bear",gv("scBear"),"g-down"]];
+  let cards = `<div class="card"><div class="lbl">Today</div><div class="val">${fmtUSD0(cur)}</div><div class="sub muted">${cfg.years}-yr horizon</div></div>`;
+  let rows="";
+  defs.forEach(([nm,mult])=>{
+    const r=projValue({...cfg, mult});
+    const pc = cur? (r.total/cur-1)*100 : 0;
+    const gc = pc>=0?"g-up":"g-down";
+    cards += `<div class="card"><div class="lbl">${nm} · P/S ${mult>=0?"+":""}${mult}%</div><div class="val ${gc}">${fmtUSD0(r.total)}</div><div class="sub ${gc}">${pc>=0?"+":""}${pc.toFixed(0)}% vs now</div></div>`;
+    rows += `<tr><td class="l"><b>${nm}</b></td><td class="${gc}">${mult>=0?"+":""}${mult}%</td><td>${fmtUSD0(r.grow)}</td><td>${fmtUSD0(r.etf)}</td><td>${fmtUSD0(r.eth)}</td><td>${fmtUSD0(r.cash)}</td><td><b>${fmtUSD0(r.total)}</b></td><td class="${gc}">${pc>=0?"+":""}${pc.toFixed(0)}%</td></tr>`;
+  });
+  $("scenCards").innerHTML=cards;
+  $("scenBody").innerHTML=rows;
+}
+["scYears","scMode","scCap","scOverride","scEtf","scEth","scBull","scBase","scBear"].forEach(id=>{
+  const el=$(id); if(el) el.addEventListener("change", renderScenarios);
+});
+$("scRun") && $("scRun").addEventListener("click", renderScenarios);
 
 function recordValue(v){
   if(!(v>0)) return;
@@ -610,8 +689,10 @@ function renderFund(){
 function showTab(name){
   $("view-positions").style.display = name==="pos"?"":"none";
   $("view-fund").style.display = name==="fund"?"":"none";
+  $("view-scen").style.display = name==="scen"?"":"none";
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.tab===name));
   if(name==="fund"){ if(!fundLoaded) loadFundamentals(); else renderFund(); }
+  if(name==="scen"){ if(!fundLoaded) loadFundamentals(); else renderScenarios(); }
 }
 document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click",()=>showTab(t.dataset.tab)));
 
