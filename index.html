@@ -264,9 +264,16 @@ const store = {
 // ====== Your Finnhub key + cash (editable above, saved in this browser) ======
 const DEFAULT_KEY = "d9etr51r01qq0pmi317gd9etr51r01qq0pmi3180";
 let API_KEY = (store.get("finnhubKey") || DEFAULT_KEY);
-// Cash plug ≈ broker total minus explicit holdings. Reduced by ~$20k on 2026-07-20 as 5 new buys were added. Edit to your real cash.
+// Cash plug ≈ broker total minus explicit holdings. Edit to your real cash.
+// CASH_VER forces the stored value to refresh when we book new buys/deposits.
+const CASH_VER = 3;              // bump when cash changes on our side
+const CASH_DEFAULT = 9487;       // 2026-08-05: 19742 − 4095 (SHOP +35) − 6160 (SPCX 55) = 9487
 let CASH = parseFloat(store.get("cashAmt"));
-if(isNaN(CASH)) CASH = 19742;
+if(isNaN(CASH) || parseInt(store.get("cashVer")||"0",10) < CASH_VER){
+  CASH = CASH_DEFAULT;
+  store.set("cashAmt", String(CASH));
+  store.set("cashVer", String(CASH_VER));
+}
 
 // ====== Holdings (cost basis derived from the two snapshots) ======
 const HOLDINGS = [
